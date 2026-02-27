@@ -1,0 +1,1049 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <!-- 모바일 세로 모드 최적화 및 튕김 방지 -->
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    
+    <!-- 모바일 앱 설치용 아이콘 및 설정 (app_icon.png 필요) -->
+    <link rel="icon" type="image/png" href="app_icon.png">
+    <link rel="apple-touch-icon" href="app_icon.png">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="theme-color" content="#ffffff">
+    
+    <title>그림 그리기</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body {
+            touch-action: none;
+            user-select: none;
+            -webkit-user-select: none;
+            background-color: #f8fafc;
+            overflow: hidden; /* 스크롤 방지 */
+            font-family: 'Arial', 'Apple SD Gothic Neo', sans-serif;
+        }
+        
+        #home-screen {
+            background-color: #ffffff; /* 이미지 로드 실패 시 깔끔한 흰색 배경 */
+            background-image: url('family_photo.png');
+            background-size: cover;
+            background-position: center top;
+            background-repeat: no-repeat;
+        }
+        
+        #home-overlay {
+            background: rgba(255, 255, 255, 0.1); 
+        }
+
+        /* 전체 세로형 레이아웃 구성 */
+        #main-container {
+            display: flex;
+            flex-direction: column;
+            height: 100vh;
+            height: 100dvh; /* iOS Safari 하단바 대응 */
+            width: 100vw;
+            position: relative;
+            background-color: #f1f5f9;
+        }
+        
+        /* 툴 버튼 디자인 */
+        .tool-btn {
+            width: 48px;
+            height: 48px;
+            border-radius: 50%;
+            border: 3px solid #f1f5f9;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.05);
+            transition: all 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            cursor: pointer;
+            flex-shrink: 0;
+            position: relative;
+            background-color: white;
+            scroll-snap-align: center;
+        }
+        .tool-btn:active { transform: scale(0.9); }
+        .tool-btn.active {
+            transform: scale(1.15);
+            border-color: #3b82f6;
+            box-shadow: 0 0 12px rgba(59, 130, 246, 0.4);
+            z-index: 10;
+        }
+
+        /* 얇은 가로형 굵기 조절 슬라이더 */
+        .thickness-slider {
+            -webkit-appearance: none;
+            width: 100%;
+            height: 8px;
+            background: #e2e8f0;
+            border-radius: 8px;
+            outline: none;
+        }
+        .thickness-slider::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            width: 28px;
+            height: 28px;
+            background: #3b82f6;
+            border: 3px solid white;
+            border-radius: 50%;
+            cursor: pointer;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+            transition: transform 0.1s;
+        }
+        .thickness-slider::-webkit-slider-thumb:active {
+            transform: scale(1.2);
+        }
+
+        /* 카테고리 탭 디자인 */
+        .category-tab {
+            flex: 1;
+            text-align: center;
+            padding: 12px 0;
+            font-weight: 800;
+            font-size: 0.95rem;
+            cursor: pointer;
+            transition: all 0.2s;
+            color: #94a3b8;
+            border-top-left-radius: 16px;
+            border-top-right-radius: 16px;
+            background-color: #f8fafc;
+            border: 1px solid transparent;
+            border-bottom: none;
+            white-space: nowrap;
+        }
+        .category-tab.active {
+            background: white;
+            color: #3b82f6;
+            border-color: #e2e8f0;
+            box-shadow: 0 -4px 6px -1px rgba(0, 0, 0, 0.05);
+        }
+
+        /* 스크롤바 숨기기 및 스와이프 부드럽게 */
+        .no-scrollbar::-webkit-scrollbar { display: none; }
+        .no-scrollbar { 
+            -ms-overflow-style: none; 
+            scrollbar-width: none; 
+            scroll-behavior: smooth;
+            -webkit-overflow-scrolling: touch;
+        }
+
+        .icon-btn {
+            transition: transform 0.1s;
+        }
+        .icon-btn:active {
+            transform: scale(0.85);
+        }
+        
+        .toggle-checkbox:checked { right: 0; border-color: #3b82f6; }
+        .toggle-checkbox:checked + .toggle-label { background-color: #3b82f6; }
+
+        /* 집중 모드 애니메이션 처리 */
+        #footer {
+            transition: transform 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+    </style>
+</head>
+<body>
+
+    <!-- 홈 화면 -->
+    <div id="home-screen" class="fixed inset-0 z-[100] flex items-end lg:items-center justify-center px-4 pt-6 pb-[calc(env(safe-area-inset-bottom)+24px)]">
+        <div id="home-overlay" class="absolute inset-0"></div>
+
+        <div class="relative z-10 flex flex-col items-center justify-center p-6 sm:p-8 bg-white/90 backdrop-blur-xl border border-white/60 shadow-2xl rounded-[2.5rem] w-[92%] max-w-sm text-center overflow-auto max-h-[72dvh] lg:max-h-none lg:overflow-visible transform transition-all">
+
+            <div class="inline-block px-4 py-1.5 bg-blue-100 text-blue-600 rounded-full text-xs sm:text-sm font-extrabold mb-4 shadow-sm border border-blue-200">
+                사랑하는 아들 이준이를 위한
+            </div>
+
+            <h1 class="text-4xl font-black text-slate-800 mb-6 flex items-center justify-center gap-2 whitespace-nowrap">
+                그림 그리기 <span class="animate-bounce drop-shadow-md">🎨</span>
+            </h1>
+
+            <!-- 가족 정보 박스 (아빠 -> 아들 -> 엄마 순서) -->
+            <div class="w-full bg-slate-50/80 rounded-2xl p-4 mb-8 border border-slate-200/60 shadow-inner">
+                <p class="text-sm text-slate-700 font-extrabold mb-3 flex items-center justify-center gap-1">
+                    <span>👨‍👩‍👦</span> 사랑하는 우리가족 <span>❤️</span>
+                </p>
+                <div class="flex justify-center gap-2 text-xs font-bold text-slate-600 whitespace-nowrap">
+                    <span class="bg-white px-2 py-1.5 rounded-lg border border-slate-200 shadow-sm"><span class="text-blue-600">정경문</span> 아빠</span>
+                    <span class="bg-white px-2 py-1.5 rounded-lg border border-slate-200 shadow-sm"><span class="text-green-600">정이준</span> 아들</span>
+                    <span class="bg-white px-2 py-1.5 rounded-lg border border-slate-200 shadow-sm"><span class="text-pink-600">이륜의</span> 엄마</span>
+                </div>
+            </div>
+
+            <button onclick="startGame()" class="w-full bg-gradient-to-r from-pink-500 to-rose-500 hover:from-pink-600 hover:to-rose-600 text-white text-2xl font-bold py-4 rounded-2xl shadow-lg shadow-pink-500/30 transition-transform active:scale-95 flex justify-center items-center gap-2">
+                <span>놀이 시작!</span> <span class="text-3xl">🚀</span>
+            </button>
+        </div>
+    </div>
+
+    <!-- 설정 모달 창 -->
+    <div id="settings-modal" class="fixed inset-0 bg-black/50 z-[200] hidden flex items-center justify-center backdrop-blur-sm">
+        <div class="bg-white p-8 rounded-[32px] w-[90%] max-w-sm shadow-2xl transform transition-all">
+            <h2 class="text-3xl font-bold text-slate-800 mb-6 text-center">⚙️ 설정</h2>
+            
+            <div class="flex items-center justify-between bg-slate-50 p-4 rounded-2xl mb-6">
+                <div>
+                    <p class="text-lg font-bold text-slate-700">집중 모드 (하단 메뉴 숨기기)</p>
+                    <p class="text-xs text-slate-500 mt-1">그림을 그릴 때 하단 메뉴가 스르륵 숨어 도화지가 넓어집니다.</p>
+                </div>
+                <div class="relative inline-block w-14 align-middle select-none transition duration-200 ease-in shrink-0">
+                    <input type="checkbox" name="toggle" id="focus-toggle" class="toggle-checkbox absolute block w-7 h-7 rounded-full bg-white border-4 appearance-none cursor-pointer z-10 transition-all duration-300" onclick="toggleFocusMode()" checked/>
+                    <label for="focus-toggle" class="toggle-label block overflow-hidden h-7 rounded-full bg-blue-500 cursor-pointer transition-colors duration-300"></label>
+                </div>
+            </div>
+
+            <button onclick="closeSettings()" class="w-full bg-blue-500 text-white font-bold text-xl py-4 rounded-2xl active:scale-95 transition-transform shadow-lg">
+                확인
+            </button>
+        </div>
+    </div>
+
+    <!-- 게임 화면 (세로형 완벽 최적화) -->
+    <div id="main-container" class="hidden">
+        
+        <!-- 1. 상단 메뉴바 (그림 그릴 때 안 숨겨짐) -->
+        <div id="header" class="flex items-center justify-between px-4 py-3 bg-white shadow-sm z-30 shrink-0">
+            <!-- 좌측 타이틀 -->
+            <h1 class="text-base sm:text-lg font-black text-slate-800 tracking-tight whitespace-nowrap">
+                정이준을 위한 그림그리기
+            </h1>
+            
+            <!-- 우측 버튼들 (뒤로가기, 캡처, 설정, 홈) -->
+            <div class="flex gap-2">
+                <button onclick="undo()" class="icon-btn bg-yellow-100 text-yellow-600 font-bold w-9 h-9 sm:w-10 sm:h-10 rounded-full text-sm sm:text-base shadow-sm border border-yellow-200 flex justify-center items-center">↩️</button>
+                <button onclick="saveDrawing()" class="icon-btn bg-blue-100 text-blue-600 font-bold w-9 h-9 sm:w-10 sm:h-10 rounded-full text-sm sm:text-base shadow-sm border border-blue-200 flex justify-center items-center">📸</button>
+                <button onclick="openSettings()" class="icon-btn bg-gray-100 text-gray-600 font-bold w-9 h-9 sm:w-10 sm:h-10 rounded-full text-sm sm:text-base shadow-sm border border-gray-200 flex justify-center items-center">⚙️</button>
+                <button onclick="goHome()" class="icon-btn bg-pink-100 text-pink-600 font-bold w-9 h-9 sm:w-10 sm:h-10 rounded-full text-sm sm:text-base shadow-sm border border-pink-200 flex justify-center items-center">🏠</button>
+            </div>
+            
+            <!-- 칭찬 팝업 -->
+            <div id="success-badge" class="absolute left-1/2 -translate-x-1/2 top-14 hidden praise-toast bg-yellow-400 text-white px-6 py-2 rounded-full font-bold text-lg shadow-xl border-2 border-white z-50 whitespace-nowrap">
+                <span id="praise-text">최고예요!</span> 🌟
+            </div>
+        </div>
+
+        <!-- 2. 1단 가로 스크롤 컬러 팔레트 & 두께 조절기 (그림 그릴 때 안 숨겨짐) -->
+        <div id="palette-section" class="bg-white shadow-sm z-20 shrink-0 border-b border-slate-200 pb-3 pt-2">
+            <!-- 1단 가로 스크롤 컬러 그리드 -->
+            <div id="tools-area" class="flex flex-row gap-3 px-4 pb-3 overflow-x-auto no-scrollbar snap-x touch-pan-x items-center">
+                <!-- JS에서 동적 생성됨 -->
+            </div>
+            
+            <!-- 펜 두께 조절 -->
+            <div class="px-6 flex items-center gap-4 w-full max-w-md mx-auto">
+                <span class="text-[10px] font-bold text-slate-400 whitespace-nowrap">얇게</span>
+                <input type="range" id="thicknessSlider" class="thickness-slider flex-1" min="2" max="35" value="10">
+                <span class="text-[10px] font-bold text-slate-400 whitespace-nowrap">굵게</span>
+            </div>
+        </div>
+
+        <!-- 3. 그림 그리기 구역 (Flex-1로 남는 공간 모두 차지하여 가장 넓음) -->
+        <div id="canvas-area" class="flex-1 relative p-3 sm:p-4 flex justify-center items-center overflow-hidden z-10 w-full">
+            <div id="canvas-wrapper" class="relative bg-white rounded-3xl shadow-md w-full h-full overflow-hidden border-4 border-white">
+                <canvas id="bgCanvas" class="absolute inset-0 touch-none"></canvas>
+                <canvas id="drawingCanvas" class="absolute inset-0 touch-none"></canvas>
+            </div>
+        </div>
+
+        <!-- 4. 하단 카테고리 탭 & 아이콘 리스트 (그림 그릴 때 숨겨짐) -->
+        <div id="footer" class="bg-white z-20 shrink-0 shadow-[0_-4px_15px_rgba(0,0,0,0.03)] pt-1">
+            <!-- 하위 아이콘 리스트 (자유그리기일 때는 숨김) -->
+            <div id="item-list-container" class="transition-all duration-300 overflow-hidden">
+                <div id="item-list" class="flex overflow-x-auto no-scrollbar gap-4 px-4 py-3 items-center min-h-[90px] bg-slate-50 snap-x">
+                    <!-- JS에서 동적 생성됨 -->
+                </div>
+            </div>
+            
+            <!-- 메인 카테고리 탭 (자유그리기를 가장 첫 탭으로 배치) -->
+            <div class="flex px-2 pt-0 gap-1 overflow-x-auto no-scrollbar bg-slate-100/50">
+                <div id="tab-free" onclick="setCategory('free')" class="category-tab active">✨ 자유그리기</div>
+                <div id="tab-basic" onclick="setCategory('basic')" class="category-tab">도형</div>
+                <div id="tab-fruit" onclick="setCategory('fruit')" class="category-tab">과일</div>
+                <div id="tab-heavy" onclick="setCategory('heavy')" class="category-tab">중장비 🚧</div>
+            </div>
+        </div>
+        
+    </div>
+
+    <script>
+        const homeScreen = document.getElementById('home-screen');
+        const mainContainer = document.getElementById('main-container');
+        const drawingCanvas = document.getElementById('drawingCanvas');
+        const bgCanvas = document.getElementById('bgCanvas');
+        const drawCtx = drawingCanvas.getContext('2d');
+        const bgCtx = bgCanvas.getContext('2d');
+        const paletteTools = document.getElementById('tools-area');
+        const itemList = document.getElementById('item-list');
+        const itemListContainer = document.getElementById('item-list-container');
+        const successBadge = document.getElementById('success-badge');
+        const praiseText = document.getElementById('praise-text');
+        const thicknessSlider = document.getElementById('thicknessSlider');
+        const header = document.getElementById('header');
+        const paletteSection = document.getElementById('palette-section');
+        const footer = document.getElementById('footer');
+
+        let isDrawing = false;
+        let currentStageIndex = 0;
+        let currentCategory = 'free'; // 기본값 자유그리기로 시작
+        let selectedColor = '#000000'; // 기본 검정색
+        let isEraser = false;
+        let isCompleted = false;
+        let currentStroke = [];
+        let totalStrokeCount = 0;
+        let strokeWidth = 10; 
+
+        let undoHistory = [];
+        let isFocusModeEnabled = true;
+        let focusTimeout = null;
+        let eraserLongPressTimer;
+
+
+        // ====== 도안(배경 가이드) 스타일 고정 ======
+        // 요청사항: 점선 간격 5px / 선 굵기 2px / 선 색상 #9ca3af(두번째 옅은 회색) 고정
+        const GUIDE_COLOR = "#9ca3af";
+        const GUIDE_LINE_PX = 2;
+        const GUIDE_DASH_PX = 5;
+        const GUIDE_DOTTED = true; // '토드(도트)=점선' 고정 적용
+
+        function applyGuideStyle(ctx, scale) {
+            ctx.strokeStyle = GUIDE_COLOR;
+            ctx.lineCap = "round";
+            ctx.lineJoin = "round";
+            // 화면 기준 px 유지(스케일에 따라 역보정)
+            ctx.lineWidth = GUIDE_LINE_PX / scale;
+            ctx.setLineDash(GUIDE_DOTTED ? [GUIDE_DASH_PX / scale, GUIDE_DASH_PX / scale] : []);
+        }
+
+        // 아이들이 좋아하는 다양한 25가지 컬러 배치
+        const colors = [
+            '#FF0000', '#FF4500', '#FF8C00', '#FFD700', '#FFFF00', // 빨강~노랑계열
+            '#ADFF2F', '#32CD32', '#228B22', '#008000', // 초록계열
+            '#00FFFF', '#00CED1', '#87CEFA', '#1E90FF', '#0000FF', '#00008B', // 파랑/청록계열
+            '#8A2BE2', '#9370DB', '#FF69B4', '#FFB6C1', // 보라/핑크계열
+            '#8B4513', '#D2691E', '#F5DEB3', // 갈색/살구색계열
+            '#000000', '#64748b', '#cbd5e1'  // 무채색계열
+        ];
+
+        const praises = ["우와! 정말 잘 그렸어요!", "우리 이준이 최고! 멋져요!", "반짝반짝 빛나는 그림!", "어쩜 이렇게 잘할까?", "꼬마 화가님 같아요!", "정말 예쁜 색깔이네요!", "그림 그리기가 즐거워요!", "대단한 집중력!", "선이 살아있네요!", "꼬마 예술가님, 최고!"];
+
+        const drawWheel = (ctx, x, y, r) => {
+            ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2); ctx.stroke();
+            ctx.beginPath(); ctx.arc(x, y, r / 3, 0, Math.PI * 2); ctx.stroke();
+        };
+
+
+        // ====== SVG 스타일 도안을 Canvas에 그리기 위한 헬퍼 ======
+        const strokePath = (ctx, d) => ctx.stroke(new Path2D(d));
+        const strokeLine = (ctx, x1, y1, x2, y2) => { ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2, y2); ctx.stroke(); };
+        const strokeCircle = (ctx, cx, cy, r) => { ctx.beginPath(); ctx.arc(cx, cy, r, 0, Math.PI * 2); ctx.stroke(); };
+        const strokeEllipse = (ctx, cx, cy, rx, ry, rotDeg = 0) => {
+            ctx.beginPath();
+            ctx.ellipse(cx, cy, rx, ry, rotDeg * Math.PI / 180, 0, Math.PI * 2);
+            ctx.stroke();
+        };
+        const strokeRect = (ctx, x, y, w, h, r = 0) => {
+            if (r && ctx.roundRect) {
+                ctx.beginPath();
+                ctx.roundRect(x, y, w, h, r);
+                ctx.stroke();
+                return;
+            }
+            ctx.strokeRect(x, y, w, h);
+        };
+
+        // ====== 요청하신 SVG 코드 기반 도안(지게차/덤프트럭/크레인) ======
+        // viewBox: 0 0 600 400 기준 좌표 그대로 사용합니다.
+        const drawForkliftSVG = (ctx) => {
+            // 차체
+            strokePath(ctx, "M 60,320 H 380 V 220 H 280 V 180 H 100 V 250 H 60 Z");
+            // 캐빈 프레임
+            strokePath(ctx, "M 100,180 L 120,60 H 260 L 280,180");
+            strokeLine(ctx, 125, 75, 255, 75);
+            // 의자 및 핸들
+            strokePath(ctx, "M 130,180 V 130 H 160 V 160 H 190 V 180");
+            strokeLine(ctx, 260, 180, 230, 130);
+            strokeEllipse(ctx, 230, 130, 20, 6, -20);
+            // 마스트 및 포크
+            strokeRect(ctx, 380, 40, 30, 300);
+            strokePath(ctx, "M 410,240 H 435 V 320 H 560 V 340 H 410 Z");
+            // 바퀴
+            strokeCircle(ctx, 140, 320, 45);
+            strokeCircle(ctx, 140, 320, 15);
+            strokeCircle(ctx, 300, 320, 45);
+            strokeCircle(ctx, 300, 320, 15);
+        };
+
+        const drawDumpTruckSVG = (ctx) => {
+            // 운전석
+            strokePath(ctx, "M 60,320 V 180 H 180 L 220,320 Z");
+            strokeRect(ctx, 85, 195, 45, 45, 3);
+            strokeRect(ctx, 145, 195, 35, 45, 3);
+            // 적재함 & 늑재
+            strokePath(ctx, "M 220,320 V 160 H 540 V 320 Z");
+            strokeLine(ctx, 285, 160, 285, 320);
+            strokeLine(ctx, 350, 160, 350, 320);
+            strokeLine(ctx, 415, 160, 415, 320);
+            strokeLine(ctx, 480, 160, 480, 320);
+            // 흙더미
+            strokePath(ctx, "M 250,160 Q 320,60 400,160 Q 450,80 520,160");
+            // 바퀴
+            strokeCircle(ctx, 120, 320, 45);
+            strokeCircle(ctx, 360, 320, 45);
+            strokeCircle(ctx, 480, 320, 45);
+        };
+
+        const drawCraneSVG = (ctx) => {
+            strokePath(ctx, "M 40,360 L 560,360");
+            strokePath(ctx, "M 100,360 L 240,360 L 240,340 L 190,340 L 190,320 L 150,320 L 150,340 L 100,340 Z");
+            strokeRect(ctx, 150, 100, 40, 220);
+            strokePath(ctx, "M 150,100 L 190,140 M 190,100 L 150,140 M 150,140 L 190,180 M 190,140 L 150,180 M 150,180 L 190,220 M 190,180 L 150,220 M 150,220 L 190,260 M 190,220 L 150,260 M 150,260 L 190,300 M 190,260 L 150,300 M 150,300 L 190,320 M 190,300 L 150,320");
+            strokePath(ctx, "M 190,120 L 240,120 L 250,160 L 190,160 Z");
+            strokePath(ctx, "M 190,130 L 235,130 L 242,160");
+            strokePath(ctx, "M 150,80 L 40,80 L 40,100 L 150,100");
+            strokeRect(ctx, 40, 70, 40, 40);
+            strokePath(ctx, "M 190,80 L 540,80 L 540,100 L 190,100");
+            strokePath(ctx, "M 190,100 L 215,80 L 240,100 L 265,80 L 290,100 L 315,80 L 340,100 L 365,80 L 390,100 L 415,80 L 440,100 L 465,80 L 490,100 L 515,80 L 540,100");
+            strokePath(ctx, "M 150,80 L 170,30 L 190,80");
+            strokeLine(ctx, 170, 30, 170, 80);
+            strokeLine(ctx, 170, 30, 50, 80);
+            strokeLine(ctx, 170, 30, 330, 80);
+            strokeLine(ctx, 170, 30, 480, 80);
+            strokeRect(ctx, 460, 100, 30, 10);
+            strokeLine(ctx, 475, 110, 475, 250);
+            strokeRect(ctx, 465, 250, 20, 20);
+            strokePath(ctx, "M 475,270 C 475,290 495,290 495,275 C 495,265 485,265 485,275");
+        };
+
+
+        // ✅ 레미콘(강화 디자인) - 600x400 좌표계(viewBox) 기반
+        // 아래 구간만 수정하면 레미콘 모양을 쉽게 바꿀 수 있어요.
+        const drawMixerTruckSVG = (ctx) => {
+            // 1) 지면(바닥선)
+            strokePath(ctx, "M 20 360 L 580 360");
+
+            // 2) 운전석(캡) 외곽
+            strokePath(ctx, "M 60 310 V 210 Q 60 190 80 190 H 180 Q 200 190 200 210 V 310 H 60 Z");
+            // 3) 창문(2개)
+            strokeRect(ctx, 80, 205, 50, 50, 6);
+            strokeRect(ctx, 140, 205, 50, 50, 6);
+
+            // 4) 믹서 드럼(몸통)
+            strokePath(ctx, "M 210,250 L 250,110 C 270,70 320,60 380,60 L 500,120 L 530,220 L 500,300 L 210,300 Z");
+            // 5) 드럼 회전 나선(디테일)
+            strokePath(ctx, "M 320,65 Q 260,180 230,295");
+            strokePath(ctx, "M 410,85 Q 350,200 320,300");
+            strokePath(ctx, "M 490,125 Q 430,240 400,300");
+
+            // 6) 후면 깔때기/배출구
+            strokePath(ctx, "M 530,160 L 570,140 L 570,220 L 530,200");
+            strokePath(ctx, "M 540,250 L 580,270 L 560,300 L 530,280");
+
+            // 7) 바퀴(3개)
+            strokeCircle(ctx, 130, 320, 40); strokeCircle(ctx, 130, 320, 15);
+            strokeCircle(ctx, 360, 320, 40); strokeCircle(ctx, 360, 320, 15);
+            strokeCircle(ctx, 460, 320, 40); strokeCircle(ctx, 460, 320, 15);
+        };
+
+
+
+        // ✅ 롤러차(강화 디자인) - 600x400 좌표계(viewBox) 기반
+        const drawRoadRollerSVG = (ctx) => {
+            strokePath(ctx, "M 20 360 L 580 360");
+
+            strokePath(ctx, "M 50,280 V 180 H 120 V 160 H 280 V 280 H 50 Z");
+            strokeRect(ctx, 150, 180, 100, 30, 6);
+            strokeLine(ctx, 160, 180, 160, 210);
+            strokeLine(ctx, 180, 180, 180, 210);
+
+            strokePath(ctx, "M 180,160 V 90 H 280 V 160");
+            strokeRect(ctx, 200, 100, 65, 45, 6);
+
+            strokeRect(ctx, 280, 220, 30, 50, 5);
+            strokeCircle(ctx, 295, 245, 5);
+
+            strokePath(ctx, "M 310,250 L 410,250 L 410,290 L 310,290 Z");
+
+            strokeCircle(ctx, 420, 255, 105);
+            strokeCircle(ctx, 420, 255, 30);
+            strokePath(ctx, "M 315,255 A 105,105 0 0,1 525,255");
+
+            strokeCircle(ctx, 150, 285, 75);
+            strokeCircle(ctx, 150, 285, 25);
+        };
+
+
+        const heavyDrawings = {
+            dumpTruck: (ctx) => { drawDumpTruckSVG(ctx); },
+            mixerTruck: (ctx) => { drawMixerTruckSVG(ctx); },
+            crane: (ctx) => { drawCraneSVG(ctx); },
+            forklift: (ctx) => { drawForkliftSVG(ctx); },
+            roadRoller: (ctx) => { drawRoadRollerSVG(ctx); },
+            excavatorBody: (ctx) => {
+                ctx.beginPath(); ctx.roundRect(-80, 25, 70, 20, 10); ctx.stroke();
+                drawWheel(ctx, -65, 35, 6); drawWheel(ctx, -45, 35, 6); drawWheel(ctx, -25, 35, 6);
+                ctx.beginPath(); ctx.moveTo(-70, 25); ctx.lineTo(-70, -25); ctx.lineTo(-40, -25); ctx.lineTo(-40, -5); ctx.lineTo(-20, -5); ctx.lineTo(-20, 25); ctx.closePath(); ctx.stroke();
+                ctx.strokeRect(-65, -20, 20, 20); ctx.beginPath(); ctx.moveTo(-40, 5); ctx.lineTo(10, -70); ctx.lineTo(25, -60); ctx.lineTo(-20, 15); ctx.stroke();
+                ctx.beginPath(); ctx.moveTo(15, -65); ctx.lineTo(70, -5); ctx.lineTo(60, 5); ctx.lineTo(5, -55); ctx.stroke();
+            },
+            excavatorBucket: (ctx) => {
+                ctx.save(); ctx.translate(-5, 0); 
+                heavyDrawings.excavatorBody(ctx);
+                ctx.beginPath(); ctx.moveTo(70, -5); ctx.quadraticCurveTo(115, 10, 100, 55); ctx.lineTo(50, 25); ctx.closePath(); ctx.stroke();
+                [[100,55,108,70,92,51],[88,48,96,63,80,42],[75,38,83,53,67,32]].forEach(v => {
+                    ctx.beginPath(); ctx.moveTo(v[0],v[1]); ctx.lineTo(v[2],v[3]); ctx.lineTo(v[4],v[5]); ctx.stroke();
+                });
+                ctx.restore();
+            },
+            excavatorDrill: (ctx) => {
+                ctx.save(); ctx.translate(-5, 0); 
+                heavyDrawings.excavatorBody(ctx);
+                ctx.strokeRect(55, -5, 25, 45); ctx.beginPath(); ctx.moveTo(60, 40); ctx.lineTo(67, 95); ctx.lineTo(75, 40); ctx.closePath(); ctx.stroke();
+                ctx.restore();
+            },
+            excavatorGrapple: (ctx) => {
+                ctx.save(); ctx.translate(-5, 0); 
+                heavyDrawings.excavatorBody(ctx);
+                ctx.beginPath(); ctx.moveTo(70, -5); ctx.quadraticCurveTo(125, -15, 115, 45); ctx.lineTo(95, 25); ctx.quadraticCurveTo(90, 5, 70, 5); ctx.stroke();
+                ctx.beginPath(); ctx.moveTo(60, 5); ctx.quadraticCurveTo(35, 45, 75, 70); ctx.lineTo(85, 45); ctx.quadraticCurveTo(70, 30, 60, 5); ctx.stroke();
+                ctx.restore();
+            }
+        };
+
+        const fruitDrawings = {
+            apple: (ctx) => {
+                ctx.beginPath(); ctx.moveTo(0, -30); ctx.bezierCurveTo(-60,-40,-70,30,-40,55); ctx.bezierCurveTo(-15,70,15,70,40,55); ctx.bezierCurveTo(70,30,60,-40,0,-30); ctx.stroke();
+                ctx.beginPath(); ctx.moveTo(0, -30); ctx.lineTo(-5, -60); ctx.stroke();
+                ctx.beginPath(); ctx.moveTo(-5, -50); ctx.quadraticCurveTo(30, -70, 40, -40); ctx.quadraticCurveTo(15, -20, -5, -50); ctx.stroke();
+            },
+            strawberry: (ctx) => {
+                ctx.beginPath(); ctx.moveTo(0, -30); ctx.bezierCurveTo(60,-30,60,20,15,70); ctx.quadraticCurveTo(0,80,-15,70); ctx.bezierCurveTo(-60,20,-60,-30,0,-30); ctx.stroke();
+                ctx.beginPath(); ctx.moveTo(0, -25); [[-25,-40],[-10,-30],[0,-50],[10,-30],[25,-40]].forEach(p => { ctx.lineTo(p[0],p[1]); ctx.lineTo(0,-25); }); ctx.stroke();
+                [[-20,0],[20,0],[0,15],[-25,30],[25,30],[-10,45],[10,45],[0,60]].forEach(s => { ctx.beginPath(); ctx.ellipse(s[0],s[1],2,4,0,0,Math.PI*2); ctx.stroke(); });
+            },
+            watermelon: (ctx) => {
+                ctx.beginPath(); ctx.moveTo(-60, 0); ctx.lineTo(60, 0); ctx.arc(0, 0, 60, 0, Math.PI); ctx.closePath(); ctx.stroke();
+                ctx.beginPath(); ctx.arc(0, 0, 45, 0, Math.PI); ctx.stroke();
+                [[-30,25],[0,30],[30,25],[-15,15],[15,15]].forEach(s => { ctx.beginPath(); ctx.ellipse(s[0],s[1],3,5,0,0,Math.PI*2); ctx.stroke(); });
+            },
+            banana: (ctx) => {
+                ctx.beginPath(); ctx.moveTo(45, -35); ctx.lineTo(55, -30); ctx.bezierCurveTo(65, 25, 15, 65, -50, 20); ctx.quadraticCurveTo(-65, 5, -55, -5); ctx.bezierCurveTo(-10, 40, 35, 5, 40, -20); ctx.closePath(); ctx.stroke();
+            },
+            blueberry: (ctx) => {
+                ctx.beginPath(); ctx.ellipse(0, 5, 55, 40, 0, 0, Math.PI * 2); ctx.stroke();
+                ctx.beginPath(); ctx.ellipse(0, -28, 20, 6, 0, 0, Math.PI); ctx.stroke();
+            },
+            grapes: (ctx) => {
+                const grapes = [[-25, -10], [0, -10], [25, -10], [-15, 15], [15, 15], [0, 40]];
+                grapes.forEach(([x, y]) => { ctx.beginPath(); ctx.arc(x, y, 18, 0, Math.PI * 2); ctx.stroke(); });
+                ctx.beginPath(); ctx.moveTo(0, -28); ctx.lineTo(0, -55); ctx.stroke();
+                ctx.beginPath(); ctx.moveTo(0, -45); ctx.quadraticCurveTo(-20, -65, -35, -45); ctx.quadraticCurveTo(-20, -30, 0, -45); ctx.stroke();
+            },
+            cherry: (ctx) => {
+                ctx.beginPath(); ctx.arc(-22, 25, 22, 0, Math.PI * 2); ctx.stroke();
+                ctx.beginPath(); ctx.arc(22, 25, 22, 0, Math.PI * 2); ctx.stroke();
+                ctx.beginPath(); ctx.moveTo(-22, 3); ctx.quadraticCurveTo(-10, -30, 0, -45); ctx.stroke();
+                ctx.beginPath(); ctx.moveTo(22, 3); ctx.quadraticCurveTo(10, -30, 0, -45); ctx.stroke();
+                ctx.beginPath(); ctx.moveTo(0, -45); ctx.quadraticCurveTo(30, -55, 35, -35); ctx.quadraticCurveTo(15, -25, 0, -45); ctx.stroke();
+            },
+            peach: (ctx) => {
+                ctx.beginPath(); ctx.moveTo(0, -30); ctx.bezierCurveTo(-50, -45, -60, 15, 0, 55); ctx.bezierCurveTo(60, 15, 50, -45, 0, -30); ctx.stroke();
+                ctx.beginPath(); ctx.moveTo(0, -30); ctx.quadraticCurveTo(-15, 10, 0, 55); ctx.stroke();
+                ctx.beginPath(); ctx.moveTo(0, -30); ctx.quadraticCurveTo(25, -55, 40, -35); ctx.quadraticCurveTo(20, -15, 0, -30); ctx.stroke();
+            },
+            pineapple: (ctx) => {
+                ctx.beginPath(); ctx.ellipse(0, 15, 35, 45, 0, 0, Math.PI * 2); ctx.stroke();
+                ctx.beginPath(); ctx.moveTo(-15, -25); ctx.lineTo(-35, -65); ctx.lineTo(-5, -30); ctx.stroke();
+                ctx.beginPath(); ctx.moveTo(-5, -30); ctx.lineTo(0, -75); ctx.lineTo(5, -30); ctx.stroke();
+                ctx.beginPath(); ctx.moveTo(5, -30); ctx.lineTo(35, -65); ctx.lineTo(15, -25); ctx.stroke();
+                ctx.beginPath(); ctx.moveTo(-20, -10); ctx.lineTo(20, 40); ctx.stroke();
+                ctx.beginPath(); ctx.moveTo(-20, 40); ctx.lineTo(20, -10); ctx.stroke();
+            },
+            orange: (ctx) => {
+                ctx.beginPath(); ctx.ellipse(0, 5, 55, 45, 0, 0, Math.PI * 2); ctx.stroke();
+                ctx.beginPath(); ctx.moveTo(0, -45); ctx.lineTo(4, -42); ctx.lineTo(10, -44); ctx.lineTo(6, -38); ctx.lineTo(8, -32); ctx.lineTo(0, -35); ctx.lineTo(-8, -32); ctx.lineTo(-6, -38); ctx.lineTo(-10, -44); ctx.lineTo(-4, -42); ctx.closePath(); ctx.stroke();
+                ctx.beginPath(); ctx.ellipse(0, -38, 3, 1.5, 0, 0, Math.PI * 2); ctx.stroke();
+            }
+        };
+
+        // 하위 리스트 (자유 그리기는 제거됨)
+        const allStages = {
+            free: [], 
+            basic: [
+                { title: "직선", type: "line", icon: "📏" },
+                { title: "동그라미", type: "circle", icon: "⭕" },
+                { title: "네모", type: "square", icon: "⬛" },
+                { title: "세모", type: "triangle", icon: "🔺" },
+                { title: "별", type: "star", icon: "⭐" },
+                { title: "하트", type: "heart", icon: "❤️" }
+            ],
+            fruit: [
+                { title: "사과", type: "custom", draw: fruitDrawings.apple, icon: "🍎", color: '#FF0000' },
+                { title: "딸기", type: "custom", draw: fruitDrawings.strawberry, icon: "🍓", color: '#FF0000' },
+                { title: "수박", type: "custom", draw: fruitDrawings.watermelon, icon: "🍉", color: '#228B22' },
+                { title: "바나나", type: "custom", draw: fruitDrawings.banana, icon: "🍌", color: '#FFD700' },
+                { title: "블루베리", type: "custom", draw: fruitDrawings.blueberry, icon: "🫐", color: '#1E90FF' },
+                { title: "포도", type: "custom", draw: fruitDrawings.grapes, icon: "🍇", color: '#9370DB' },
+                { title: "체리", type: "custom", draw: fruitDrawings.cherry, icon: "🍒", color: '#FF0000' },
+                { title: "복숭아", type: "custom", draw: fruitDrawings.peach, icon: "🍑", color: '#FF69B4' },
+                { title: "파인애플", type: "custom", draw: fruitDrawings.pineapple, icon: "🍍", color: '#FFD700' },
+                { title: "귤", type: "custom", draw: fruitDrawings.orange, icon: "🍊", color: '#FF8C00' }
+            ],
+            heavy: [
+                { title: "덤프트럭", type: "custom", draw: heavyDrawings.dumpTruck, icon: "🚛", svg: true },
+                { title: "레미콘", type: "custom", draw: heavyDrawings.mixerTruck, icon: "🚚", svg: true },
+                { title: "크레인", type: "custom", draw: heavyDrawings.crane, icon: "🏗️", svg: true },
+                { title: "지게차", type: "custom", draw: heavyDrawings.forklift, icon: "📦", svg: true },
+                { title: "롤러차", type: "custom", draw: heavyDrawings.roadRoller, icon: "🚜", svg: true },
+                { title: "포크레인", type: "custom", draw: heavyDrawings.excavatorBucket, icon: "🏗️" },
+                { title: "드릴차", type: "custom", draw: heavyDrawings.excavatorDrill, icon: "🔨" },
+                { title: "집게차", type: "custom", draw: heavyDrawings.excavatorGrapple, icon: "🦀" }
+            ]
+        };
+
+        function triggerHaptic() {
+            if (navigator.vibrate) {
+                navigator.vibrate(15);
+            }
+        }
+
+        function toggleFocusMode() {
+            triggerHaptic();
+            const checkbox = document.getElementById('focus-toggle');
+            isFocusModeEnabled = checkbox.checked;
+        }
+
+        function openSettings() {
+            triggerHaptic();
+            document.getElementById('settings-modal').classList.remove('hidden');
+        }
+
+        function closeSettings() {
+            triggerHaptic();
+            document.getElementById('settings-modal').classList.add('hidden');
+        }
+
+        function startGame() {
+            triggerHaptic();
+            if (window.AudioContext || window.webkitAudioContext) {
+                const ac = new (window.AudioContext || window.webkitAudioContext)();
+                ac.resume();
+            }
+            homeScreen.classList.add('hidden');
+            mainContainer.classList.remove('hidden');
+            mainContainer.classList.add('flex');
+            
+            // 첫 시작 시 딜레이 주고 캔버스 사이즈 계산
+            setTimeout(() => {
+                resizeCanvas();
+                setCategory('free'); // 시작 시 자유그리기 활성화
+            }, 50);
+        }
+
+        function goHome() {
+            triggerHaptic();
+            homeScreen.classList.remove('hidden');
+            mainContainer.classList.add('hidden');
+            mainContainer.classList.remove('flex');
+        }
+
+        function initPalette() {
+            paletteTools.innerHTML = '';
+            
+            // 지우개 도구
+            const eraser = createTool('🧽', () => { 
+                triggerHaptic();
+                isEraser = true; 
+                initPalette(); 
+            });
+            if (isEraser) eraser.classList.add('active');
+            
+            eraser.addEventListener('pointerdown', startEraserTimer);
+            eraser.addEventListener('pointerup', cancelEraserTimer);
+            eraser.addEventListener('pointerleave', cancelEraserTimer);
+            
+            paletteTools.appendChild(eraser);
+
+            // 색상 배치
+            colors.forEach(color => {
+                const dot = createTool('', () => { 
+                    triggerHaptic();
+                    selectedColor = color; 
+                    isEraser = false; 
+                    initPalette(); 
+                });
+                dot.style.backgroundColor = color;
+                if (!isEraser && selectedColor === color) dot.classList.add('active');
+                paletteTools.appendChild(dot);
+            });
+            
+            // 전체 지우기 버튼을 팔레트 목록 마지막에 추가
+            const clearBtn = createTool('🧹', () => { triggerHaptic(); resetCanvas(); });
+            paletteTools.appendChild(clearBtn);
+        }
+
+        function startEraserTimer(e) {
+            eraserLongPressTimer = setTimeout(() => {
+                triggerHaptic();
+                resetCanvas();
+                playWinSound();
+                praiseText.innerText = "쓱쓱~ 모두 지웠어요!";
+                successBadge.classList.remove('hidden');
+                setTimeout(() => successBadge.classList.add('hidden'), 2000);
+            }, 800); 
+        }
+
+        function cancelEraserTimer() {
+            clearTimeout(eraserLongPressTimer);
+        }
+
+        function createTool(inner, onClick) {
+            const btn = document.createElement('div');
+            btn.className = 'tool-btn snap-center';
+            btn.innerHTML = `<span style="font-size:1.6rem">${inner}</span>`;
+            btn.onclick = onClick;
+            return btn;
+        }
+
+        thicknessSlider.oninput = function() {
+            strokeWidth = parseInt(this.value);
+        };
+
+        function setCategory(cat) {
+            triggerHaptic();
+            currentCategory = cat;
+            currentStageIndex = 0; 
+            
+            // 탭 스타일 초기화
+            document.querySelectorAll('.category-tab').forEach(t => {
+                t.classList.remove('active');
+            });
+            document.getElementById(`tab-${cat}`).classList.add('active');
+            
+            // 자유그리기 선택 시 하위 아이콘 숨김
+            if(cat === 'free') {
+                itemListContainer.style.height = '0px';
+                itemList.innerHTML = '';
+            } else {
+                itemListContainer.style.height = '100px';
+                renderItems();
+            }
+            
+            // 레이아웃이 변한 뒤에 캔버스 크기를 다시 맞추기 위해 약간의 지연 후 리사이즈
+            setTimeout(() => {
+                resizeCanvas(false);
+                // ✅ 리사이즈 직후 1프레임 뒤에 도안을 그리면(특히 모바일) 누락이 줄어듭니다.
+                requestAnimationFrame(() => initStage());
+            }, 250);
+        }
+
+        function renderItems() {
+            itemList.innerHTML = '';
+            allStages[currentCategory].forEach((stage, idx) => {
+                const btn = document.createElement('button');
+                // 선택된 아이템 강조 스타일
+                const isActive = currentStageIndex === idx;
+                btn.className = `flex flex-col items-center min-w-[75px] transition-all snap-center ${isActive ? 'scale-110 opacity-100 drop-shadow-md' : 'scale-95 opacity-60'}`;
+                
+                btn.onclick = () => { 
+                    triggerHaptic();
+                    currentStageIndex = idx; 
+                    renderItems(); // 클릭 시 다시 렌더링해서 강조 스타일 변경
+                    // ✅ 모바일/태블릿에서 레이아웃 계산이 늦는 경우를 대비해 한 번 더 리사이즈 후 도안 갱신
+                    requestAnimationFrame(() => { resizeCanvas(false); initStage(); }); 
+                };
+                btn.innerHTML = `<span class="text-4xl sm:text-5xl mb-1">${stage.icon}</span><span class="text-xs sm:text-sm font-bold text-slate-700">${stage.title}</span>`;
+                itemList.appendChild(btn);
+            });
+        }
+
+        
+        function resizeCanvas(shouldRedraw = true) {
+            const area = document.getElementById('canvas-area');
+            if (area.clientWidth === 0) return;
+
+            const paddingX = 24;
+            const paddingY = 24;
+            const cssWidth = area.clientWidth - paddingX;
+            const cssHeight = area.clientHeight - paddingY;
+
+            const wrapper = document.getElementById('canvas-wrapper');
+            wrapper.style.width = cssWidth + 'px';
+            wrapper.style.height = cssHeight + 'px';
+
+            const dpr = Math.max(1, window.devicePixelRatio || 1);
+
+            // 캔버스는 레티나 해상도 대응(모바일/태블릿에서 선명하게)
+            drawingCanvas.width = Math.round(cssWidth * dpr);
+            drawingCanvas.height = Math.round(cssHeight * dpr);
+            bgCanvas.width = Math.round(cssWidth * dpr);
+            bgCanvas.height = Math.round(cssHeight * dpr);
+
+            // 좌표계는 CSS px 기준으로 사용
+            drawCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
+            bgCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
+
+            if (shouldRedraw) initStage();
+        }
+
+
+        window.addEventListener('resize', resizeCanvas);
+        window.addEventListener('load', () => {
+            initPalette();
+        });
+
+        function saveHistory() {
+            undoHistory.push(drawCtx.getImageData(0, 0, drawingCanvas.width, drawingCanvas.height));
+            if (undoHistory.length > 20) undoHistory.shift();
+        }
+
+        function undo() {
+            triggerHaptic();
+            if (undoHistory.length > 0) {
+                const lastState = undoHistory.pop();
+                drawCtx.putImageData(lastState, 0, 0);
+            } else {
+                drawCtx.clearRect(0, 0, drawingCanvas.width, drawingCanvas.height);
+            }
+        }
+
+        function resetCanvas() { 
+            saveHistory(); 
+            drawCtx.clearRect(0, 0, drawingCanvas.width, drawingCanvas.height);
+        }
+
+        function initStage() {
+            isCompleted = false; 
+            totalStrokeCount = 0;
+            undoHistory = []; 
+            successBadge.classList.add('hidden'); 
+            
+            drawCtx.clearRect(0, 0, drawingCanvas.width, drawingCanvas.height);
+            bgCtx.clearRect(0, 0, bgCanvas.width, bgCanvas.height);
+
+            // 자유그리기 처리
+            if (currentCategory === 'free') {
+                return;
+            }
+
+            let stage = allStages[currentCategory][currentStageIndex];
+            if (!stage) return;
+
+            // 과일 등에 할당된 기본 색상이 있다면 자동 변경
+            if (stage.color) {
+                selectedColor = stage.color;
+                isEraser = false;
+                initPalette();
+            }
+
+            drawBackgroundGuide(stage);
+        }
+
+        
+        function drawBackgroundGuide(stage) {
+            // ⚠️ 캔버스는 DPR(레티나)로 확대되어 있으므로, 화면(CSS) 크기 기준으로 계산해야 합니다.
+            const rect = bgCanvas.getBoundingClientRect();
+            const cw = rect.width;
+            const ch = rect.height;
+            if (!cw || !ch) return;
+
+            bgCtx.save();
+
+            // ✅ SVG 좌표(600x400) 기반 도안: "화면 안에 무조건 들어오게(Fit)" 배치
+            if (stage.svg) {
+                const padding = Math.min(32, Math.round(Math.min(cw, ch) * 0.06)); // 모바일 여백
+                const availW = Math.max(10, cw - padding * 2);
+                const availH = Math.max(10, ch - padding * 2);
+
+                const scale = Math.min(availW / 600, availH / 400) * 0.98;
+
+                const tx = (cw - 600 * scale) / 2;
+                const ty = (ch - 400 * scale) / 2;
+
+                bgCtx.translate(tx, ty);
+                bgCtx.scale(scale, scale);
+
+                applyGuideStyle(bgCtx, scale);
+                stage.draw(bgCtx);
+
+                bgCtx.restore();
+                return;
+            }
+
+            // ✅ 기존 도형/과일/기타 도안(센터 기준 확대)도 CSS 크기 기준으로 계산
+            const minDim = Math.min(cw, ch);
+            const baseScale = minDim / 350;
+            const scale = baseScale * 1.5;
+
+            bgCtx.translate(cw / 2, ch / 2);
+            bgCtx.scale(scale, scale);
+
+            applyGuideStyle(bgCtx, scale);
+
+            if (stage.type === "custom") {
+                stage.draw(bgCtx);
+            } else {
+                const s = 50;
+                bgCtx.beginPath();
+                switch(stage.type) {
+                    case "line": bgCtx.moveTo(-s*2, 0); bgCtx.lineTo(s*2, 0); break;
+                    case "circle": bgCtx.arc(0, 0, s*1.5, 0, Math.PI * 2); break;
+                    case "square": bgCtx.strokeRect(-s, -s, s*2, s*2); break;
+                    case "triangle": bgCtx.moveTo(0, -s); bgCtx.lineTo(s, s); bgCtx.lineTo(-s, s); bgCtx.closePath(); break;
+                    case "star":
+                        for(let i=0;i<10;i++){
+                            const r=i%2?s:s/2;
+                            const a=Math.PI*2*i/10-Math.PI/2;
+                            bgCtx.lineTo(r*Math.cos(a),r*Math.sin(a));
+                        }
+                        bgCtx.closePath();
+                        break;
+                    case "heart":
+                        bgCtx.moveTo(0, -15);
+                        bgCtx.bezierCurveTo(50, -60, 90, 10, 0, 70);
+                        bgCtx.bezierCurveTo(-90, 10, -50, -60, 0, -15);
+                        break;
+                }
+                bgCtx.stroke();
+            }
+
+            bgCtx.restore();
+        }
+
+
+        function getMousePos(e) {
+            const rect = drawingCanvas.getBoundingClientRect();
+            const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+            const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+            return { x: clientX - rect.left, y: clientY - rect.top };
+        }
+
+        function handleStart(e) {
+            isDrawing = true;
+            const pos = getMousePos(e);
+            
+            saveHistory();
+
+            // 집중 모드: 하단 메뉴바만 스르륵 숨기기 (상단 및 팔레트는 유지)
+            if (isFocusModeEnabled) {
+                clearTimeout(focusTimeout);
+                footer.style.transform = 'translateY(100%)';
+            }
+
+            currentStroke = [pos];
+            drawCtx.beginPath();
+            drawCtx.moveTo(pos.x, pos.y);
+            playSound(200, 0.1);
+        }
+
+        function handleMove(e) {
+            if (!isDrawing) return;
+            const pos = getMousePos(e);
+            if (isEraser) {
+                drawCtx.globalCompositeOperation = 'destination-out';
+                drawCtx.lineWidth = strokeWidth * 1.5;
+            } else {
+                drawCtx.globalCompositeOperation = 'source-over';
+                drawCtx.lineWidth = strokeWidth;
+                drawCtx.strokeStyle = selectedColor;
+            }
+            drawCtx.lineCap = "round"; drawCtx.lineJoin = "round";
+            drawCtx.lineTo(pos.x, pos.y); drawCtx.stroke();
+            currentStroke.push(pos);
+        }
+
+        function handleEnd() {
+            if (!isDrawing) return;
+            isDrawing = false;
+            
+            // 집중 모드: 1초 뒤에 하단 메뉴 다시 보이기
+            if (isFocusModeEnabled) {
+                focusTimeout = setTimeout(() => {
+                    footer.style.transform = 'translateY(0)';
+                }, 1000);
+            }
+
+            if (currentStroke.length > 5) analyzeStroke(currentStroke);
+        }
+
+        function analyzeStroke(stroke) {
+            if (isEraser || currentCategory === 'free') return; // 자유그리기에서는 칭찬 이펙트 무시
+            let length = 0;
+            for(let i=1; i<stroke.length; i++) length += Math.hypot(stroke[i].x - stroke[i-1].x, stroke[i].y - stroke[i-1].y);
+            if (length > 40) {
+                totalStrokeCount++;
+                if (totalStrokeCount > 3) triggerPraise();
+            }
+        }
+
+        function triggerPraise() {
+            if (isCompleted) return;
+            isCompleted = true;
+            praiseText.innerText = praises[Math.floor(Math.random() * praises.length)];
+            successBadge.classList.remove('hidden');
+            playWinSound(); createCelebration(); 
+            setTimeout(() => { successBadge.classList.add('hidden'); isCompleted = false; }, 4000);
+        }
+
+        function playSound(freq, duration) {
+            try {
+                const ac = new (window.AudioContext || window.webkitAudioContext)();
+                const osc = ac.createOscillator(); const gain = ac.createGain();
+                osc.type = 'sine'; osc.frequency.setValueAtTime(freq, ac.currentTime);
+                gain.gain.setValueAtTime(0.05, ac.currentTime); 
+                gain.gain.exponentialRampToValueAtTime(0.01, ac.currentTime + duration);
+                osc.connect(gain); gain.connect(ac.destination);
+                osc.start(); osc.stop(ac.currentTime + duration);
+            } catch(e) {}
+        }
+
+        function playWinSound() {
+            playSound(523.25, 0.2); setTimeout(() => playSound(659.25, 0.2), 150); setTimeout(() => playSound(783.99, 0.4), 300);
+        }
+
+        function createCelebration() {
+            triggerHaptic(); 
+            const celebrationColors = ['#FF0000', '#FFD93D', '#4CAF50', '#4D96FF', '#FF69B4', '#9C27B0'];
+            for (let i = 0; i < 80; i++) {
+                const conf = document.createElement('div');
+                conf.className = 'confetti';
+                conf.style.left = Math.random() * 100 + 'vw';
+                conf.style.top = '-20px';
+                conf.style.backgroundColor = celebrationColors[Math.floor(Math.random() * celebrationColors.length)];
+                const size = Math.random() * 12 + 10; 
+                conf.style.width = size + 'px'; conf.style.height = size + 'px';
+                document.body.appendChild(conf);
+                conf.animate([{ transform: 'translateY(0) rotate(0deg)', opacity: 1 }, { transform: `translate(${(Math.random()-0.5)*400}px, 110vh) rotate(${Math.random()*1000}deg)`, opacity: 0 }], { duration: 1500 + Math.random() * 1000, easing: 'ease-out' }).onfinish = () => conf.remove();
+            }
+        }
+
+        function saveDrawing() {
+            triggerHaptic();
+            const tempCanvas = document.createElement('canvas');
+            tempCanvas.width = drawingCanvas.width; tempCanvas.height = drawingCanvas.height;
+            const tempCtx = tempCanvas.getContext('2d');
+            tempCtx.fillStyle = "white"; tempCtx.fillRect(0,0,tempCanvas.width, tempCanvas.height);
+            tempCtx.drawImage(bgCanvas, 0, 0); tempCtx.drawImage(drawingCanvas, 0, 0);
+            const link = document.createElement('a');
+            link.download = `이준이의그림_${new Date().getTime()}.png`;
+            link.href = tempCanvas.toDataURL(); link.click();
+            praiseText.innerText = "찰칵! 사진으로 저장했어요!";
+            successBadge.classList.remove('hidden');
+            setTimeout(() => successBadge.classList.add('hidden'), 2000);
+        }
+
+        drawingCanvas.addEventListener('mousedown', handleStart);
+        drawingCanvas.addEventListener('mousemove', handleMove);
+        drawingCanvas.addEventListener('mouseup', handleEnd);
+        drawingCanvas.addEventListener('mouseout', handleEnd);
+        
+        drawingCanvas.addEventListener('touchstart', (e) => { e.preventDefault(); handleStart(e); }, { passive: false });
+        drawingCanvas.addEventListener('touchmove', (e) => { e.preventDefault(); handleMove(e); }, { passive: false });
+        drawingCanvas.addEventListener('touchend', (e) => { e.preventDefault(); handleEnd(); }, { passive: false });
+        drawingCanvas.addEventListener('touchcancel', (e) => { e.preventDefault(); handleEnd(); }, { passive: false });
+
+    </script>
+</body>
+</html>
