@@ -308,13 +308,18 @@
         const GUIDE_DASH_PX = 5;
         const GUIDE_DOTTED = true; // '토드(도트)=점선' 고정 적용
 
+        // ✅ DPR(레티나) 값은 resizeCanvas()에서 갱신됩니다.
+        let DEVICE_DPR = 1;
+
         function applyGuideStyle(ctx, scale) {
             ctx.strokeStyle = GUIDE_COLOR;
             ctx.lineCap = "round";
             ctx.lineJoin = "round";
-            // 화면 기준 px 유지(스케일에 따라 역보정)
-            ctx.lineWidth = GUIDE_LINE_PX / scale;
-            ctx.setLineDash(GUIDE_DOTTED ? [GUIDE_DASH_PX / scale, GUIDE_DASH_PX / scale] : []);
+
+            // ✅ 화면(CSS) 기준 2px/5px로 보이도록 (스케일 + DPR 모두 역보정)
+            const denom = Math.max(0.0001, scale * DEVICE_DPR);
+            ctx.lineWidth = GUIDE_LINE_PX / denom;
+            ctx.setLineDash(GUIDE_DOTTED ? [GUIDE_DASH_PX / denom, GUIDE_DASH_PX / denom] : []);
         }
 
         // 아이들이 좋아하는 다양한 25가지 컬러 배치
@@ -764,26 +769,41 @@
             const area = document.getElementById('canvas-area');
             if (area.clientWidth === 0) return;
 
+            // ✅ 캔버스 영역 패딩(기존 UI 유지)
             const paddingX = 24;
             const paddingY = 24;
-            const cssWidth = area.clientWidth - paddingX;
-            const cssHeight = area.clientHeight - paddingY;
 
             const wrapper = document.getElementById('canvas-wrapper');
-            wrapper.style.width = cssWidth + 'px';
-            wrapper.style.height = cssHeight + 'px';
 
-            const dpr = Math.max(1, window.devicePixelRatio || 1);
+            // wrapper 크기 지정(화면에 보이는 크기)
+            const cssW = Math.max(10, area.clientWidth - paddingX);
+            const cssH = Math.max(10, area.clientHeight - paddingY);
+            wrapper.style.width = cssW + 'px';
+            wrapper.style.height = cssH + 'px';
 
-            // 캔버스는 레티나 해상도 대응(모바일/태블릿에서 선명하게)
-            drawingCanvas.width = Math.round(cssWidth * dpr);
-            drawingCanvas.height = Math.round(cssHeight * dpr);
-            bgCanvas.width = Math.round(cssWidth * dpr);
-            bgCanvas.height = Math.round(cssHeight * dpr);
+            // ✅ 실제 화면(CSS) 기준 크기 재측정 (모바일에서 계산 오차/지연 방지)
+            const rect = wrapper.getBoundingClientRect();
+            const w = Math.max(10, rect.width);
+            const h = Math.max(10, rect.height);
 
-            // 좌표계는 CSS px 기준으로 사용
-            drawCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
-            bgCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
+            // ✅ DPR(레티나) 갱신
+            DEVICE_DPR = Math.max(1, window.devicePixelRatio || 1);
+
+            // ✅ 캔버스 CSS 크기까지 명시(터치 좌표/보이는 영역 불일치 방지)
+            drawingCanvas.style.width = w + 'px';
+            drawingCanvas.style.height = h + 'px';
+            bgCanvas.style.width = w + 'px';
+            bgCanvas.style.height = h + 'px';
+
+            // ✅ 비트맵 크기(레티나 선명도)
+            drawingCanvas.width = Math.round(w * DEVICE_DPR);
+            drawingCanvas.height = Math.round(h * DEVICE_DPR);
+            bgCanvas.width = Math.round(w * DEVICE_DPR);
+            bgCanvas.height = Math.round(h * DEVICE_DPR);
+
+            // ✅ 좌표계는 CSS px 기준으로 사용
+            drawCtx.setTransform(DEVICE_DPR, 0, 0, DEVICE_DPR, 0, 0);
+            bgCtx.setTransform(DEVICE_DPR, 0, 0, DEVICE_DPR, 0, 0);
 
             if (shouldRedraw) initStage();
         }
@@ -913,16 +933,15 @@
         }
 
 
-        function getMousePos(e) {
+        function getPointerPos(e) {
             const rect = drawingCanvas.getBoundingClientRect();
-            const clientX = e.touches ? e.touches[0].clientX : e.clientX;
-            const clientY = e.touches ? e.touches[0].clientY : e.clientY;
-            return { x: clientX - rect.left, y: clientY - rect.top };
+            return { x: e.clientX - rect.left, y: e.clientY - rect.top };
         }
 
         function handleStart(e) {
             isDrawing = true;
-            const pos = getMousePos(e);
+            try { drawingCanvas.setPointerCapture(e.pointerId); } catch(err) {}
+            const pos = getPointerPos(e);
             
             saveHistory();
 
@@ -940,7 +959,7 @@
 
         function handleMove(e) {
             if (!isDrawing) return;
-            const pos = getMousePos(e);
+            const pos = getPointerPos(e);
             if (isEraser) {
                 drawCtx.globalCompositeOperation = 'destination-out';
                 drawCtx.lineWidth = strokeWidth * 1.5;
@@ -954,10 +973,12 @@
             currentStroke.push(pos);
         }
 
-        function handleEnd() {
+        function handleEnd(e) {
             if (!isDrawing) return;
             isDrawing = false;
-            
+
+            try { drawingCanvas.releasePointerCapture(e.pointerId); } catch(err) {}
+
             // 집중 모드: 1초 뒤에 하단 메뉴 다시 보이기
             if (isFocusModeEnabled) {
                 focusTimeout = setTimeout(() => {
@@ -1034,15 +1055,14 @@
             setTimeout(() => successBadge.classList.add('hidden'), 2000);
         }
 
-        drawingCanvas.addEventListener('mousedown', handleStart);
-        drawingCanvas.addEventListener('mousemove', handleMove);
-        drawingCanvas.addEventListener('mouseup', handleEnd);
-        drawingCanvas.addEventListener('mouseout', handleEnd);
-        
-        drawingCanvas.addEventListener('touchstart', (e) => { e.preventDefault(); handleStart(e); }, { passive: false });
-        drawingCanvas.addEventListener('touchmove', (e) => { e.preventDefault(); handleMove(e); }, { passive: false });
-        drawingCanvas.addEventListener('touchend', (e) => { e.preventDefault(); handleEnd(); }, { passive: false });
-        drawingCanvas.addEventListener('touchcancel', (e) => { e.preventDefault(); handleEnd(); }, { passive: false });
+        // ✅ 모바일/태블릿/펜 입력까지 안정적인 Pointer Events 사용
+        drawingCanvas.style.touchAction = 'none';
+
+        drawingCanvas.addEventListener('pointerdown', (e) => { e.preventDefault(); handleStart(e); }, { passive: false });
+        drawingCanvas.addEventListener('pointermove', (e) => { e.preventDefault(); handleMove(e); }, { passive: false });
+        drawingCanvas.addEventListener('pointerup', (e) => { e.preventDefault(); handleEnd(e); }, { passive: false });
+        drawingCanvas.addEventListener('pointercancel', (e) => { e.preventDefault(); handleEnd(e); }, { passive: false });
+        drawingCanvas.addEventListener('pointerleave', (e) => { e.preventDefault(); handleEnd(e); }, { passive: false });
 
     </script>
 </body>
